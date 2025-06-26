@@ -189,50 +189,98 @@ REGLAS ESTRICTAS:
 
 Formato de respuesta: Máximo 120 palabras, directo al punto, SIEMPRE incluir datos numéricos cuando sea posible."""
 
+    def _get_user_data_from_api(self, username):
+        """
+        Placeholder para la función que obtiene los datos del usuario desde la API.
+        En una implementación real, esto haría una llamada HTTP a la API de usuario.
+        Debería devolver un objeto o diccionario con los campos:
+        nombre_usuario, peso, altura, genero, fecha_nacimiento (objeto date), meta_calorias, nivel_actividad.
+        Y un método calcular_edad() si devuelve un objeto similar al modelo Usuario.
+        """
+        # Simulación: Devolver datos de ejemplo o None si no se encuentra.
+        # Esto necesitará ser reemplazado por la lógica real de la API.
+        print(f"ADVERTENCIA: Usando datos simulados de API para el usuario: {username}")
+        # Para que funcione con el código existente, simularemos un objeto que tiene calcular_edad
+        # y los atributos necesarios.
+        from datetime import date
+        class MockUsuarioAPI:
+            def __init__(self, nombre_usuario, peso, altura, genero, fecha_nacimiento_str):
+                self.nombre_usuario = nombre_usuario
+                self.peso = peso
+                self.altura = altura # Asumimos que la API devuelve altura en cm
+                self.genero = genero
+                try:
+                    self.fecha_nacimiento = date.fromisoformat(fecha_nacimiento_str)
+                except (ValueError, TypeError):
+                    self.fecha_nacimiento = date(1990, 1, 1) # Default si es inválida
+                self.meta_calorias = 2000
+                self.nivel_actividad = "sedentario"
+
+            def calcular_edad(self):
+                today = date.today()
+                return today.year - self.fecha_nacimiento.year - \
+                       ((today.month, today.day) < (self.fecha_nacimiento.month, self.fecha_nacimiento.day))
+
+        if username == "testuser": # Ejemplo
+            return MockUsuarioAPI(
+                nombre_usuario="testuser",
+                peso=70.0,
+                altura=175, # cm
+                genero="masculino",
+                fecha_nacimiento_str="1990-01-01"
+            )
+        # Devuelve un objeto mock con valores por defecto si no es 'testuser' para evitar NoneErrors inmediatos
+        # en el flujo normal, pero idealmente la API real manejaría usuarios no encontrados.
+        return MockUsuarioAPI(username, 60, 160, "femenino", "2000-01-01")
+
+
     def get_user_health_data(self):
         """Obtiene datos relevantes del usuario para personalizar respuestas"""
+        imc = None
+        tmb = None
+        peso = None
+        genero = None
+        edad = None
+        altura_cm = None # Renombrado para claridad, API debería proveer en cm
+
         try:
-            # Intentar importar el módulo de cálculos
-            try:
-                from .calculos import Calculo
+            # 1. Obtener datos del usuario desde la API (usando el placeholder)
+            user_api_data = self._get_user_data_from_api(self.usuario)
+
+            if user_api_data:
+                peso = user_api_data.peso
+                altura_cm = user_api_data.altura # Asumiendo que la API provee altura en cm
+                genero = user_api_data.genero
+                # fecha_nacimiento se usa indirectamente por calcular_edad
+                if hasattr(user_api_data, 'calcular_edad'):
+                    edad = user_api_data.calcular_edad()
+                else: # Fallback si el objeto API no tiene calcular_edad pero tiene fecha_nacimiento
+                    from datetime import date
+                    if hasattr(user_api_data, 'fecha_nacimiento') and isinstance(user_api_data.fecha_nacimiento, date):
+                        today = date.today()
+                        edad = today.year - user_api_data.fecha_nacimiento.year - \
+                               ((today.month, today.day) < (user_api_data.fecha_nacimiento.month, user_api_data.fecha_nacimiento.day))
                 
-                # Obtener datos básicos - usando métodos seguros
-                try:
-                    imc = Calculo.calcular_imc(self.usuario)
-                except:
-                    imc = None
+                # 2. Importar Calculo (si aún no está a nivel de clase o global)
+                from .calculos import Calculo # Asegurarse que la importación es correcta
+
+                # 3. Llamar a las funciones de Calculo con los parámetros correctos
+                if peso is not None and altura_cm is not None:
+                    imc = Calculo.calcular_imc(peso=peso, estatura_cm=altura_cm)
                 
-                try:
-                    tmb = Calculo.calcular_TMB(self.usuario)
-                except:
-                    tmb = None
-                
-                try:
-                    peso = Calculo.get_latest_weight(self.usuario)
-                except:
-                    peso = None
-                
-                try:
-                    genero = Calculo.get_user_gender(self.usuario)
-                except:
-                    genero = None
-                
-                try:
-                    edad = getattr(Calculo, 'get_user_age', lambda x: None)(self.usuario)
-                except:
-                    edad = None
-                
-                try:
-                    altura = getattr(Calculo, 'get_user_height', lambda x: None)(self.usuario)
-                except:
-                    altura = None
-            
-            except ImportError:
-                print("No se pudo importar el módulo Calculos")
-                imc = tmb = peso = genero = edad = altura = None
-            
-            # Obtener consumo de agua del día
-            vasos_agua = 0
+                if peso is not None and altura_cm is not None and edad is not None and genero is not None:
+                    tmb = Calculo.calcular_TMB(peso=peso, estatura_cm=altura_cm, edad=edad, genero=genero)
+            else:
+                print(f"No se pudieron obtener datos del usuario {self.usuario} desde la API.")
+
+        except ImportError:
+            print("Error crítico: No se pudo importar el módulo Calculos o datetime.date.")
+        except Exception as e:
+            print(f"Error procesando datos de salud del usuario desde API: {e}")
+            # Los valores por defecto (None) se usarán
+
+        # Obtener consumo de agua del día (se mantiene igual)
+        vasos_agua = 0
             try:
                 db_path = f"./users/{self.usuario}/alimentos.db"
                 if os.path.exists(db_path):

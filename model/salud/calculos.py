@@ -1,5 +1,3 @@
-import sqlite3
-
 class Calculo:
     # Rangos de IMC y sus categorías
     RANGOS_IMC = {
@@ -32,32 +30,22 @@ class Calculo:
     }
 
     @staticmethod
-    def calcular_imc(usuario):
+    def calcular_imc(peso, estatura_cm):
+        """
+        Calcula el Índice de Masa Corporal (IMC).
+        Peso en kg.
+        Estatura en cm.
+        """
+        if not peso or not estatura_cm or estatura_cm == 0:
+            print("Error al calcular IMC: Peso y estatura son requeridos y estatura no puede ser cero.")
+            return None
         try:
-            conn = sqlite3.connect(f"./users/{usuario}/alimentos.db")
-            cursor = conn.cursor()
-            
-            cursor.execute("SELECT estatura FROM datos")
-            resultado_estatura = cursor.fetchone()
-            if resultado_estatura is None:
-                raise ValueError("No se encontró la estatura para el usuario")
-            estatura = resultado_estatura[0] / 100  # Convertir a metros
-
-            cursor.execute("SELECT peso FROM peso WHERE num = (SELECT MAX(num) FROM peso)")
-            resultado_peso = cursor.fetchone()
-            if resultado_peso is None:
-                raise ValueError("No se encontró ningún registro de peso")
-            peso = resultado_peso[0]
-
-            imc = peso / (estatura ** 2)
+            estatura_m = estatura_cm / 100  # Convertir a metros
+            imc = peso / (estatura_m ** 2)
             return imc
-
-        except (sqlite3.Error, ValueError) as e:
+        except (TypeError, ValueError) as e:
             print(f"Error al calcular IMC: {e}")
             return None
-        finally:
-            if conn:
-                conn.close()
 
     @staticmethod
     def evaluar_imc(imc):
@@ -73,39 +61,30 @@ class Calculo:
         return ("Valor IMC fuera de rango", "riesgo_alto")
 
     @staticmethod
-    def calcular_TMB(usuario):
+    def calcular_TMB(peso, estatura_cm, edad, genero):
+        """
+        Calcula la Tasa Metabólica Basal (TMB).
+        Peso en kg.
+        Estatura en cm.
+        Edad en años.
+        Genero como string ("masculino" o "femenino").
+        """
+        if not all([peso, estatura_cm, edad, genero]):
+            print("Error al calcular TMB: Todos los parámetros son requeridos (peso, estatura, edad, genero).")
+            return None
         try:
-            conn = sqlite3.connect(f"./users/{usuario}/alimentos.db")
-            cursor = conn.cursor()
-            
-            cursor.execute("SELECT estatura, edad, genero FROM datos")
-            result = cursor.fetchone()
-            if result is None:
-                raise ValueError("No se encontraron datos del usuario")
-            estatura, edad, genero = result
-            estatura = estatura  # Altura en cm
-
-            cursor.execute("SELECT peso FROM peso WHERE num = (SELECT MAX(num) FROM peso)")
-            resultado_peso = cursor.fetchone()
-            if resultado_peso is None:
-                raise ValueError("No se encontró ningún registro de peso")
-            peso = resultado_peso[0]
-
+            # estatura_cm ya está en cm, no se necesita conversión adicional para la fórmula.
             if genero.lower() in ["hombre", "masculino"]:
-                tmb = 66.47 + (13.75 * peso) + (5 * estatura) - (6.76 * edad)
+                tmb = 66.47 + (13.75 * peso) + (5 * estatura_cm) - (6.76 * edad)
             elif genero.lower() in ["mujer", "femenino"]:
-                tmb = 655.1 + (9.56 * peso) + (1.85 * estatura) - (4.68 * edad)
+                tmb = 655.1 + (9.56 * peso) + (1.85 * estatura_cm) - (4.68 * edad)
             else:
-                raise ValueError("Género no válido")
+                raise ValueError("Género no válido. Debe ser 'masculino' o 'femenino'.")
             
             return tmb
-
-        except (sqlite3.Error, ValueError) as e:
+        except (TypeError, ValueError) as e:
             print(f"Error al calcular TMB: {e}")
             return None
-        finally:
-            if conn:
-                conn.close()
     
     @staticmethod
     def evaluar_TMB(tmb, genero):
@@ -114,10 +93,15 @@ class Calculo:
             return ("Error al calcular TMB", "riesgo_alto")
             
         genero_norm = genero.lower()
-        if genero_norm not in ["hombre", "masculino", "mujer", "femenino"]:
-            genero_norm = "masculino"  # Valor por defecto
-        
-        genero_key = "masculino" if genero_norm in ["hombre", "masculino"] else "femenino"
+        # Aseguramos que genero_key sea uno de los esperados en RANGOS_TMB
+        if genero_norm in ["hombre", "masculino"]:
+            genero_key = "masculino"
+        elif genero_norm in ["mujer", "femenino"]:
+            genero_key = "femenino"
+        else:
+            # Si el género no es reconocido, no se puede evaluar TMB apropiadamente.
+            print(f"Advertencia: Género '{genero}' no reconocido para evaluar TMB. Usando 'masculino' como default podría ser impreciso.")
+            genero_key = "masculino" # O manejar como error: return ("Género no válido para evaluación", "riesgo_alto")
         
         for rango, (categoria, riesgo) in Calculo.RANGOS_TMB[genero_key].items():
             min_val, max_val = rango
@@ -127,61 +111,21 @@ class Calculo:
         return ("Valor TMB fuera de rango", "riesgo_alto")
     
     @staticmethod
-    def get_latest_weight(usuario):
+    def calcular_agua_recomendada(peso_kg):
+        """
+        Calcula la cantidad de agua recomendada en vasos según el peso.
+        Peso en kg.
+        """
+        if peso_kg is None or peso_kg <= 0:
+            print("Error al calcular agua recomendada: Peso es requerido y debe ser positivo.")
+            return 8  # Valor por defecto si no hay peso válido
         try:
-            conn = sqlite3.connect(f"./users/{usuario}/alimentos.db")
-            cursor = conn.cursor()
-            
-            cursor.execute("SELECT peso FROM peso ORDER BY fecha DESC LIMIT 1")
-            result = cursor.fetchone()
-            
-            if result is None:
-                raise ValueError("No se encontró ningún registro de peso")
-            
-            return result[0]
-        except (sqlite3.Error, ValueError) as e:
-            print(f"Error al obtener el peso más reciente: {e}")
-            return None
-        finally:
-            if conn:
-                conn.close()
-    
-    @staticmethod
-    def get_user_gender(usuario):
-        """Obtiene el género del usuario desde la base de datos"""
-        try:
-            conn = sqlite3.connect(f"./users/{usuario}/alimentos.db")
-            cursor = conn.cursor()
-            
-            cursor.execute("SELECT genero FROM datos")
-            result = cursor.fetchone()
-            
-            if result is None:
-                raise ValueError("No se encontró el género del usuario")
-            
-            return result[0]
-        except (sqlite3.Error, ValueError) as e:
-            print(f"Error al obtener el género del usuario: {e}")
-            return "masculino"  # Valor por defecto
-        finally:
-            if conn:
-                conn.close()
-    
-    @staticmethod
-    def calcular_agua_recomendada(usuario):
-        """Calcula la cantidad de agua recomendada en vasos según el peso y actividad física"""
-        try:
-            peso = Calculo.get_latest_weight(usuario)
-            if peso is None:
-                return 8  # Valor por defecto si no hay peso registrado
-            
             # Cálculo base: 30-35 ml por kg de peso corporal
             # Convertido a vasos de 250 ml
-            vasos_base = round((peso * 35) / 250)
+            vasos_base = round((peso_kg * 35) / 250)
             
             # Limitar a un mínimo de 6 y máximo de 12 vasos
             return max(6, min(12, vasos_base))
-            
         except Exception as e:
             print(f"Error al calcular agua recomendada: {e}")
             return 8  # Valor por defecto en caso de error

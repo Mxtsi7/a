@@ -42,16 +42,17 @@ class UserDatabase(IUserDatabase):
                 ''',
                 'datos': '''
                     CREATE TABLE IF NOT EXISTS datos (
-                        nombre TEXT PRIMARY KEY,
-                        estatura INTEGER,
-                        nivel_actividad TEXT,
-                        genero TEXT,
-                        meta_cal INTEGER,
-                        edad INTEGER,
-                        recordatorio TEXT,
-                        cantidad_dias VARCHAR,
-                        ultimo_msj TEXT,
-                        profile_pic_path TEXT
+                        nombre TEXT PRIMARY KEY, # Se mantiene como identificador local si es necesario
+                        # estatura INTEGER, <- Eliminada, gestionada por API
+                        # nivel_actividad TEXT, <- Eliminada, gestionada por API
+                        # genero TEXT, <- Eliminada, gestionada por API
+                        # meta_cal INTEGER, <- Eliminada, gestionada por API
+                        # edad INTEGER, <- Columna eliminada
+                        # fecha_nacimiento DATE, <- Eliminada, gestionada por API
+                        recordatorio TEXT, # Específico de la app local
+                        cantidad_dias VARCHAR, # Específico de la app local
+                        ultimo_msj TEXT, # Específico de la app local
+                        profile_pic_path TEXT # Podría ser local o URL de API
                     )
                 ''',
                 'mensajes': '''
